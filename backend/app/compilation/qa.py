@@ -41,15 +41,15 @@ def ask_wiki(
     # Add index as context
     file_contents["INDEX.md"] = index_content
 
-    answer = ask_with_files(SYSTEM_PROMPT, question, file_contents, max_tokens=8192)
+    result = ask_with_files(SYSTEM_PROMPT, question, file_contents, max_tokens=8192)
 
     if save_output:
         slug = slugify(question)[:60]
         filename = f"qa-{slug}.md"
-        output = f"# Q: {question}\n\n{answer}\n"
+        output = f"# Q: {question}\n\n{result.text}\n"
         write_output(filename, output)
 
-    return answer
+    return result
 
 
 def _load_all_articles(articles: list) -> dict[str, str]:
@@ -78,13 +78,13 @@ def _select_relevant_articles(
     import json
     import re
 
-    response = ask(system, user_msg, max_tokens=2048)
+    result = ask(system, user_msg, max_tokens=2048)
 
     # Parse JSON array from response
     try:
-        paths = json.loads(response)
+        paths = json.loads(result.text)
     except json.JSONDecodeError:
-        match = re.search(r"\[.*\]", response, re.DOTALL)
+        match = re.search(r"\[.*\]", result.text, re.DOTALL)
         if match:
             paths = json.loads(match.group(0))
         else:

@@ -94,9 +94,9 @@ def _plan_articles(raw_summaries: dict[str, str], wiki_state: dict[str, str]) ->
     parts.append("\nNow plan the wiki articles. Return ONLY the JSON array.")
 
     user_message = "\n".join(parts)
-    response = ask(system, user_message, max_tokens=16384)
+    result = ask(system, user_message, max_tokens=16384)
 
-    return _parse_plan_json(response)
+    return _parse_plan_json(result.text)
 
 
 def _parse_plan_json(response: str) -> list[dict]:
@@ -188,12 +188,12 @@ def _write_article(article: dict, raw_full: dict[str, str]) -> str:
         f"\nWrite this article now."
     )
 
-    content = ask_with_files(system, user_message, relevant_files, max_tokens=8192)
+    result = ask_with_files(system, user_message, relevant_files, max_tokens=8192)
 
     path = write_wiki_article(
         slug=article["slug"],
         title=article["title"],
-        content=content,
+        content=result.text,
         category=article["category"],
         sources=article.get("sources", []),
         tags=article.get("tags", []),

@@ -48,9 +48,9 @@ def lint_wiki(fix: bool = False) -> str:
         f"Produce a detailed quality report."
     )
 
-    report = ask_with_files(SYSTEM_PROMPT, user_msg, file_contents, max_tokens=8192)
+    result = ask_with_files(SYSTEM_PROMPT, user_msg, file_contents, max_tokens=8192)
 
     # Save report
-    write_output("lint-report.md", f"# Wiki Lint Report\n\n{report}\n")
+    write_output("lint-report.md", f"# Wiki Lint Report\n\n{result.text}\n")
 
-    return report
+    return result.text
