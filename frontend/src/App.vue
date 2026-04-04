@@ -58,7 +58,7 @@ async function handleLogout() {
         </button>
       </div>
       <div class="px-5 py-3 border-t border-border">
-        <div class="text-[12px] font-medium text-text-heading truncate">{{ auth.user?.name }}</div>
+        <div class="text-[12px] font-medium text-text-heading truncate">{{ auth.user?.first_name }} {{ auth.user?.last_name }}</div>
         <div class="text-[11px] text-text-muted truncate">{{ auth.user?.email }}</div>
       </div>
     </aside>

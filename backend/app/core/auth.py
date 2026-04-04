@@ -84,7 +84,8 @@ async def seed_users(db: AsyncSession):
 
     user = User(
         email="karrad@karra.co",
-        name="Karrad",
+        first_name="Murthy",
+        last_name="Karra",
         hashed_password=hash_password("Llmkb2026#"),
         role="admin",
     )

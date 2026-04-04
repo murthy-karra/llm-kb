@@ -1,3 +1,4 @@
+import sqlalchemy
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -18,4 +19,5 @@ async def get_db() -> AsyncSession:
 
 async def init_db():
     async with engine.begin() as conn:
+        await conn.execute(sqlalchemy.text("CREATE SCHEMA IF NOT EXISTS auth"))
         await conn.run_sync(Base.metadata.create_all)

@@ -67,7 +67,8 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     email: str
     password: str
-    name: str
+    first_name: str
+    last_name: str
 
 
 @app.post("/api/auth/login")
@@ -81,7 +82,7 @@ async def login(req: LoginRequest, response: Response, db: AsyncSession = Depend
     set_refresh_cookie(response, refresh_token)
     return {
         "token": access_token,
-        "user": {"id": user.id, "email": user.email, "name": user.name, "role": user.role},
+        "user": {"id": user.id, "email": user.email, "first_name": user.first_name, "last_name": user.last_name, "role": user.role},
     }
 
 
@@ -92,7 +93,8 @@ async def register(req: RegisterRequest, response: Response, db: AsyncSession = 
         raise HTTPException(409, "Email already registered")
     user = User(
         email=req.email,
-        name=req.name,
+        first_name=req.first_name,
+        last_name=req.last_name,
         hashed_password=hash_password(req.password),
     )
     db.add(user)
@@ -103,7 +105,7 @@ async def register(req: RegisterRequest, response: Response, db: AsyncSession = 
     set_refresh_cookie(response, refresh_token)
     return {
         "token": access_token,
-        "user": {"id": user.id, "email": user.email, "name": user.name, "role": user.role},
+        "user": {"id": user.id, "email": user.email, "first_name": user.first_name, "last_name": user.last_name, "role": user.role},
     }
 
 
@@ -122,7 +124,7 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
     set_refresh_cookie(response, refresh_token)
     return {
         "token": access_token,
-        "user": {"id": user.id, "email": user.email, "name": user.name, "role": user.role},
+        "user": {"id": user.id, "email": user.email, "first_name": user.first_name, "last_name": user.last_name, "role": user.role},
     }
 
 
@@ -134,7 +136,7 @@ async def logout(response: Response):
 
 @app.get("/api/auth/me")
 async def get_me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email, "name": user.name, "role": user.role}
+    return {"id": user.id, "email": user.email, "first_name": user.first_name, "last_name": user.last_name, "role": user.role}
 
 
 # ---------- GET endpoints ----------
