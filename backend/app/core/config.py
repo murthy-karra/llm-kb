@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr = SecretStr("")
     gemini_api_key: SecretStr = SecretStr("")
 
+    # Database
+    database_url: str = "postgresql+asyncpg://llmkb:llmkb_dev_2026@localhost:5432/llm-kb"
+    jwt_secret: str = "llmkb-jwt-secret-change-in-prod"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_hours: int = 24
+
     # Search engine
     search_engine_url: str = "http://localhost:8880"
 
