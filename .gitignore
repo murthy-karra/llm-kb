@@ -17,6 +17,9 @@ data/assets/
 # Rust
 search-engine/target/
 
+# Tantivy index
+.tantivy-index/
+
 # Node
 frontend/node_modules/
 frontend/dist/
