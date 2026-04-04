@@ -20,4 +20,5 @@ async def get_db() -> AsyncSession:
 async def init_db():
     async with engine.begin() as conn:
         await conn.execute(sqlalchemy.text("CREATE SCHEMA IF NOT EXISTS auth"))
+        await conn.execute(sqlalchemy.text("CREATE SCHEMA IF NOT EXISTS app"))
         await conn.run_sync(Base.metadata.create_all)

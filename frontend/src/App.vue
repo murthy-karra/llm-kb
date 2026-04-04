@@ -1,6 +1,6 @@
 <script setup>
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { LayoutDashboard, BookOpen, FileText, MessageCircle, Search, LogOut } from 'lucide-vue-next'
+import { LayoutDashboard, BookOpen, FileText, MessageCircle, Search, Folder, LogOut } from 'lucide-vue-next'
 import { useAuthStore } from './stores/auth'
 import { useRouter } from 'vue-router'
 import { computed } from 'vue'
@@ -13,6 +13,7 @@ const isLoginPage = computed(() => route.name === 'login')
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/wikis', label: 'Wikis', icon: Folder },
   { to: '/wiki', label: 'Wiki', icon: BookOpen },
   { to: '/raw', label: 'Raw Sources', icon: FileText },
   { to: '/ask', label: 'Ask', icon: MessageCircle },

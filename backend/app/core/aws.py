@@ -48,3 +48,29 @@ def download_from_wiki_bucket(s3_key: str, dest_path: Path) -> Path:
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     s3.download_file(settings.s3_wiki_bucket, str(s3_key), str(dest_path))
     return dest_path
+
+
+def generate_presigned_upload_url(
+    s3_key: str,
+    content_type: str,
+    max_size_bytes: int = 10 * 1024 * 1024,
+    expires_in: int = 900,
+) -> dict:
+    """Generate a presigned POST for uploading a file to S3 quarantine bucket.
+
+    Uses presigned POST (not PUT) to enforce content-length-range via policy
+    conditions, preventing clients from uploading files larger than max_size_bytes.
+
+    Returns dict with 'url' and 'fields' for the POST form data.
+    """
+    s3 = get_s3_client()
+    return s3.generate_presigned_post(
+        Bucket=settings.s3_quarantine_bucket,
+        Key=s3_key,
+        Fields={"Content-Type": content_type},
+        Conditions=[
+            ["content-length-range", 1, max_size_bytes],
+            ["eq", "$Content-Type", content_type],
+        ],
+        ExpiresIn=expires_in,
+    )

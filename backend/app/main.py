@@ -19,7 +19,12 @@ from app.core.auth import (
     set_refresh_cookie,
     verify_password,
 )
-from app.core.config import PROVIDER_PRESETS, apply_model_override, ensure_dirs, settings
+from app.core.config import (
+    PROVIDER_PRESETS,
+    apply_model_override,
+    ensure_dirs,
+    settings,
+)
 from app.core.database import async_session, get_db, init_db
 from app.core.filesystem import (
     get_wiki_index_content,
@@ -29,6 +34,8 @@ from app.core.filesystem import (
     read_with_frontmatter,
 )
 from app.models.user import User
+from app.api.wikis import router as wikis_router
+from app.api.uploads import router as uploads_router
 
 ensure_dirs()
 
@@ -51,14 +58,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(wikis_router, prefix="/api/wikis", tags=["wikis"])
+app.include_router(uploads_router, prefix="/api/wikis", tags=["uploads"])
+
 
 # ---------- helpers ----------
+
 
 def _dir_size(path: Path) -> int:
     return sum(f.stat().st_size for f in path.glob("**/*") if f.is_file())
 
 
 # ---------- Auth endpoints ----------
+
 
 class LoginRequest(BaseModel):
     email: str
@@ -73,7 +85,9 @@ class RegisterRequest(BaseModel):
 
 
 @app.post("/api/auth/login")
-async def login(req: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
+async def login(
+    req: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
+):
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(req.password, user.hashed_password):
@@ -83,12 +97,20 @@ async def login(req: LoginRequest, response: Response, db: AsyncSession = Depend
     set_refresh_cookie(response, refresh_token)
     return {
         "token": access_token,
-        "user": {"id": user.id, "email": user.email, "first_name": user.first_name, "last_name": user.last_name, "role": user.role},
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+        },
     }
 
 
 @app.post("/api/auth/register")
-async def register(req: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)):
+async def register(
+    req: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)
+):
     existing = await db.execute(select(User).where(User.email == req.email))
     if existing.scalar_one_or_none():
         raise HTTPException(409, "Email already registered")
@@ -106,12 +128,20 @@ async def register(req: RegisterRequest, response: Response, db: AsyncSession = 
     set_refresh_cookie(response, refresh_token)
     return {
         "token": access_token,
-        "user": {"id": user.id, "email": user.email, "first_name": user.first_name, "last_name": user.last_name, "role": user.role},
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+        },
     }
 
 
 @app.post("/api/auth/refresh")
-async def refresh(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+async def refresh(
+    request: Request, response: Response, db: AsyncSession = Depends(get_db)
+):
     token = request.cookies.get("refresh_token")
     if not token:
         raise HTTPException(401, "No refresh token")
@@ -125,7 +155,13 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
     set_refresh_cookie(response, refresh_token)
     return {
         "token": access_token,
-        "user": {"id": user.id, "email": user.email, "first_name": user.first_name, "last_name": user.last_name, "role": user.role},
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+        },
     }
 
 
@@ -137,10 +173,17 @@ async def logout(response: Response):
 
 @app.get("/api/auth/me")
 async def get_me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email, "first_name": user.first_name, "last_name": user.last_name, "role": user.role}
+    return {
+        "id": user.id,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "role": user.role,
+    }
 
 
 # ---------- GET endpoints ----------
+
 
 @app.get("/api/status")
 def get_status():
@@ -172,13 +215,15 @@ def get_wiki_articles():
             if line and not line.startswith("#"):
                 preview = line[:200]
                 break
-        articles.append({
-            "path": rel,
-            "title": meta.get("title", path.stem),
-            "category": meta.get("category", ""),
-            "tags": meta.get("tags", []),
-            "preview": preview,
-        })
+        articles.append(
+            {
+                "path": rel,
+                "title": meta.get("title", path.stem),
+                "category": meta.get("category", ""),
+                "tags": meta.get("tags", []),
+                "preview": preview,
+            }
+        )
     return {"articles": articles}
 
 
@@ -195,10 +240,12 @@ def get_wiki_article(path: str):
 def get_raw_files():
     files = []
     for path in list_raw_files():
-        files.append({
-            "path": path.name,
-            "size_kb": round(path.stat().st_size / 1024, 1),
-        })
+        files.append(
+            {
+                "path": path.name,
+                "size_kb": round(path.stat().st_size / 1024, 1),
+            }
+        )
     return {"files": files}
 
 
@@ -212,9 +259,11 @@ def get_raw_file(path: str):
 
 # ---------- Image endpoints ----------
 
+
 @app.get("/api/image/{slug}")
 def get_image(slug: str, style: str = "hero"):
     from app.core.images import get_cached_image
+
     path = get_cached_image(slug, style)
     if not path:
         raise HTTPException(404, "Image not generated yet")
@@ -232,6 +281,7 @@ class GenerateImageRequest(BaseModel):
 @app.post("/api/image/generate")
 def post_generate_image(req: GenerateImageRequest):
     from app.core.images import generate_article_image
+
     path = generate_article_image(
         article_slug=req.slug,
         title=req.title,
@@ -243,6 +293,7 @@ def post_generate_image(req: GenerateImageRequest):
 
 
 # ---------- POST endpoints ----------
+
 
 @app.get("/api/models")
 def get_models():
@@ -283,6 +334,7 @@ class CompileRequest(BaseModel):
 @app.post("/api/compile")
 def post_compile(req: CompileRequest):
     from app.compilation.compiler import compile_wiki
+
     written = compile_wiki(full_rebuild=req.full)
     return {"articles_written": len(written), "paths": written}
 
@@ -290,6 +342,7 @@ def post_compile(req: CompileRequest):
 @app.post("/api/lint")
 def post_lint():
     from app.linting.linter import lint_wiki
+
     report = lint_wiki(fix=False)
     return {"report": report}
 
@@ -301,6 +354,7 @@ class IngestURLRequest(BaseModel):
 @app.post("/api/ingest/url")
 def post_ingest_url(req: IngestURLRequest):
     from app.ingestion.ingest import ingest_url
+
     path = ingest_url(req.url)
     return {"path": str(path.name)}
 
