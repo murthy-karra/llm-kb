@@ -1,0 +1,44 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiofiles>=25.1.0",
+    "anthropic>=0.89.0",
+    "beautifulsoup4>=4.14.3",
+    "fastapi>=0.135.3",
+    "html2text>=2025.4.15",
+    "httpx>=0.28.1",
+    "marker-pdf>=1.5.5",
+    "mistune>=3.2.0",
+    "openai>=2.30.0",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.1",
+    "pypdf2>=3.0.1",
+    "python-docx>=1.2.0",
+    "python-frontmatter>=1.1.0",
+    "python-multipart>=0.0.22",
+    "python-pptx>=1.0.2",
+    "rich>=14.3.3",
+    "typer[all]>=0.24.1",
+    "uvicorn[standard]>=0.43.0",
+]
+
+[project.scripts]
+llm-kb = "app.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.15.9",
+]

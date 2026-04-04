@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Environment
+.env
+backend/.env
+
+# Data (managed separately)
+data/raw/
+data/wiki/
+data/output/
+data/assets/
+
+# Rust
+search-engine/target/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
