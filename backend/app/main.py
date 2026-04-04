@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -207,6 +208,38 @@ def get_raw_file(path: str):
     if not full_path.exists() or not full_path.is_file():
         raise HTTPException(404, "File not found")
     return {"content": read_file(full_path)}
+
+
+# ---------- Image endpoints ----------
+
+@app.get("/api/image/{slug}")
+def get_image(slug: str, style: str = "hero"):
+    from app.core.images import get_cached_image
+    path = get_cached_image(slug, style)
+    if not path:
+        raise HTTPException(404, "Image not generated yet")
+    return FileResponse(path, media_type="image/png")
+
+
+class GenerateImageRequest(BaseModel):
+    slug: str
+    title: str
+    category: str
+    preview: str = ""
+    style: str = "hero"
+
+
+@app.post("/api/image/generate")
+def post_generate_image(req: GenerateImageRequest):
+    from app.core.images import generate_article_image
+    path = generate_article_image(
+        article_slug=req.slug,
+        title=req.title,
+        category=req.category,
+        preview=req.preview,
+        style=req.style,
+    )
+    return {"slug": req.slug, "style": req.style, "path": str(path.name)}
 
 
 # ---------- POST endpoints ----------

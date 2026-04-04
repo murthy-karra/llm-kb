@@ -60,7 +60,6 @@ strong { font-weight: 500; }
               border-color 0.2s ease;
 }
 .card:hover {
-  transform: translateY(-2px) scale(1.005);
   box-shadow: var(--shadow-card-hover);
   border-color: var(--color-border-strong);
 }
@@ -206,12 +205,13 @@ strong { font-weight: 500; }
 }
 
 /* Prose styling for article content */
-.prose h1 { font-size: 22px; font-weight: 600; color: var(--color-text-heading); line-height: 1.35; margin: 28px 0 12px; letter-spacing: -0.01em; }
-.prose h2 { font-size: 17px; font-weight: 600; color: var(--color-text-heading); line-height: 1.4; margin: 24px 0 8px; letter-spacing: -0.005em; }
-.prose h3 { font-size: 15px; font-weight: 600; color: var(--color-text-title); line-height: 1.4; margin: 20px 0 6px; }
-.prose p { margin: 10px 0; color: var(--color-text-body); line-height: 1.65; }
+.prose h1 { font-size: 22px; font-weight: 600; color: var(--color-text-heading); line-height: 1.35; margin: 32px 0 14px; letter-spacing: -0.01em; }
+.prose h2 { font-size: 17px; font-weight: 600; color: var(--color-text-heading); line-height: 1.4; margin: 28px 0 10px; letter-spacing: -0.005em; padding-top: 4px; border-top: 1px solid var(--color-border); }
+.prose h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.prose h3 { font-size: 15px; font-weight: 600; color: var(--color-text-title); line-height: 1.4; margin: 22px 0 8px; }
+.prose p { margin: 12px 0; color: var(--color-text-title); line-height: 1.7; }
 .prose ul, .prose ol { margin: 10px 0; padding-left: 22px; }
-.prose li { margin: 5px 0; line-height: 1.6; }
+.prose li { margin: 5px 0; line-height: 1.6; color: var(--color-text-title); }
 .prose a { color: var(--color-accent); font-weight: 500; text-decoration: none; transition: color 0.15s ease; }
 .prose a:hover { text-decoration: underline; color: var(--color-accent-hover); }
 .prose code { font-size: 13px; background: var(--color-surface); padding: 2px 7px; border-radius: 5px; color: var(--color-text-title); border: 1px solid var(--color-border); }
@@ -221,5 +221,5 @@ strong { font-weight: 500; }
 .prose th { text-align: left; font-weight: 600; color: var(--color-text-heading); padding: 10px 14px; border-bottom: 2px solid var(--color-border-strong); background: var(--color-surface); }
 .prose td { padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
 .prose tr:hover td { background: var(--color-surface); }
-.prose blockquote { border-left: 3px solid var(--color-accent); padding-left: 18px; margin: 16px 0; color: var(--color-text-body); font-style: italic; }
+.prose blockquote { border-left: 3px solid var(--color-accent); padding-left: 18px; margin: 16px 0; color: var(--color-text-title); font-style: italic; }
 .prose hr { border: none; border-top: 1px solid var(--color-border); margin: 24px 0; }

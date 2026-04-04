@@ -64,7 +64,7 @@ async function handleLogout() {
     </aside>
 
     <main class="flex-1 py-8 px-10 overflow-auto">
-      <div class="max-w-3xl">
+      <div :class="route.name === 'article' ? 'max-w-5xl' : 'max-w-3xl'">
         <RouterView />
       </div>
     </main>

@@ -109,6 +109,23 @@ export const useKbStore = defineStore('kb', () => {
     }
   }
 
+  async function generateImage(slug, title, category, preview, style = 'hero') {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 120000)
+    try {
+      const res = await fetch('/api/image/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, title, category, preview, style }),
+        signal: controller.signal,
+      })
+      if (!res.ok) throw new Error(await res.text())
+      return await res.json()
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
   async function searchWiki(query, limit = 10) {
     const res = await fetch('http://localhost:8880/search', {
       method: 'POST',
@@ -121,6 +138,6 @@ export const useKbStore = defineStore('kb', () => {
   return {
     status, articles, rawFiles, models, loading, error,
     fetchStatus, fetchArticles, fetchArticle, fetchRawFiles, fetchModels,
-    askQuestion, compileWiki, lintWiki, ingestURL, searchWiki,
+    askQuestion, compileWiki, lintWiki, ingestURL, generateImage, searchWiki,
   }
 })

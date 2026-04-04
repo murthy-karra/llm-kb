@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr = SecretStr("")
     gemini_api_key: SecretStr = SecretStr("")
 
+    # AWS
+    aws_profile: str = "personal"
+    s3_quarantine_bucket: str = "llm-kb-wiki-quarantine"
+    s3_wiki_bucket: str = "llm-kb-wiki"
+
     # Database
     database_url: str = "postgresql+asyncpg://llmkb:llmkb_dev_2026@localhost:5432/llm-kb"
     jwt_secret: str = "llmkb-jwt-secret-change-in-prod"
