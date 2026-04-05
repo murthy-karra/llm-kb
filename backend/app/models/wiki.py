@@ -11,6 +11,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.wiki_article import WikiArticle
     from app.models.wiki_file import WikiFile
 
 
@@ -23,6 +24,9 @@ class Wiki(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    compile_model: Mapped[str] = mapped_column(String(50), nullable=False, default="groq")
+    polish_model: Mapped[str] = mapped_column(String(50), nullable=False, default="openai")
+    qa_model: Mapped[str] = mapped_column(String(50), nullable=False, default="openai")
     created_by: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("auth.users.id", ondelete="CASCADE"),
@@ -40,3 +44,4 @@ class Wiki(Base):
 
     creator: Mapped["User"] = relationship(lazy="selectin")
     files: Mapped[list["WikiFile"]] = relationship(back_populates="wiki", lazy="selectin")
+    articles: Mapped[list["WikiArticle"]] = relationship(back_populates="wiki", lazy="noload")

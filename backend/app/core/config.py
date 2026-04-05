@@ -54,6 +54,7 @@ class Settings(BaseSettings):
 
     # AWS
     aws_profile: str = "personal"
+    aws_region: str = "us-west-1"
     s3_quarantine_bucket: str = "llm-kb-wiki-quarantine"
     s3_wiki_bucket: str = "llm-kb-wiki"
 
@@ -111,6 +112,24 @@ def apply_model_override(model_flag: str | None) -> None:
     else:
         # Treat as explicit model name, keep current provider
         settings.llm_model = model_flag
+
+
+def resolve_model_config(preset_name: str) -> dict[str, str]:
+    """Return {api_key, base_url, model} for a preset name without mutating globals."""
+    if preset_name not in PROVIDER_PRESETS:
+        return {
+            "api_key": settings.llm_api_key.get_secret_value(),
+            "base_url": settings.llm_base_url,
+            "model": preset_name,
+        }
+    preset = PROVIDER_PRESETS[preset_name]
+    key_attr = preset["env_key"].removeprefix("LLMKB_").lower()
+    api_key = getattr(settings, key_attr, None)
+    return {
+        "api_key": api_key.get_secret_value() if api_key else "",
+        "base_url": preset["base_url"],
+        "model": preset["model"],
+    }
 
 
 def ensure_dirs() -> None:

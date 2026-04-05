@@ -14,8 +14,9 @@ Given the raw source documents provided, identify the distinct concepts, entitie
 4. Include cross-references: if Article A should link to Article B, note that in tags
 5. **COVERAGE: Every raw source file MUST be represented by at least one article. Check every filename in the raw source list and verify it maps to at least one planned article's sources list. If a raw file is not covered, add an article for it.**
 6. Avoid duplicate or heavily overlapping articles
-7. Aim for 20-35 articles depending on source volume and breadth. Err on the side of MORE articles with focused scope rather than fewer generic ones. With 10+ source documents, you should produce at least 20 articles.
-8. **TAGS ARE WIKILINKS: The "tags" field defines which other planned articles this article will link to via [[wikilinks]]. Only list slugs of OTHER articles in THIS plan. Do not invent slugs that aren't in the plan. Every slug in every tags list must match exactly one slug in the plan.**
+7. Scale the number of articles to the source volume: roughly 2-5 articles per source document. 1 document → 2-5 articles. 5 documents → 8-15 articles. 10+ documents → 15-35 articles. Never produce more than 5× the number of source documents. Quality over quantity.
+8. **DO NOT HALLUCINATE.** Every fact in a planned article's description must come from the source documents. If a source document mentions a topic briefly, it gets a short article — don't pad it with invented detail. If the sources don't cover a topic, don't create an article for it.
+9. **TAGS ARE WIKILINKS: The "tags" field defines which other planned articles this article will link to via [[wikilinks]]. Only list slugs of OTHER articles in THIS plan. Do not invent slugs that aren't in the plan. Every slug in every tags list must match exactly one slug in the plan.**
 
 ## Existing wiki state
 

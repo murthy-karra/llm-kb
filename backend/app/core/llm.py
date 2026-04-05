@@ -32,10 +32,10 @@ class LLMResponse:
     model: str = ""
 
 
-def get_client() -> OpenAI:
+def get_client(api_key: str | None = None, base_url: str | None = None) -> OpenAI:
     return OpenAI(
-        api_key=settings.llm_api_key.get_secret_value(),
-        base_url=settings.llm_base_url,
+        api_key=api_key or settings.llm_api_key.get_secret_value(),
+        base_url=base_url or settings.llm_base_url,
     )
 
 
@@ -68,9 +68,11 @@ def ask(
     user_message: str,
     model: str | None = None,
     max_tokens: int | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
 ) -> LLMResponse:
     """Single-turn API call. Returns LLMResponse with text and usage."""
-    client = get_client()
+    client = get_client(api_key=api_key, base_url=base_url)
     resolved_model = model or settings.llm_model
     resolved_max = max_tokens or settings.llm_max_tokens
 
@@ -112,10 +114,36 @@ def ask_with_files(
     file_contents: dict[str, str],
     model: str | None = None,
     max_tokens: int | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
 ) -> LLMResponse:
     """Wrap each file in <document> tags, concatenate with user_message, call ask()."""
     docs = []
     for path, content in file_contents.items():
         docs.append(f'<document path="{path}">\n{content}\n</document>')
     full_message = "\n\n".join(docs) + "\n\n" + user_message
-    return ask(system, full_message, model=model, max_tokens=max_tokens)
+    return ask(system, full_message, model=model, max_tokens=max_tokens,
+               api_key=api_key, base_url=base_url)
+
+
+def ask_with_preset(
+    preset_name: str,
+    system: str,
+    user_message: str,
+    file_contents: dict[str, str] | None = None,
+    max_tokens: int | None = None,
+) -> LLMResponse:
+    """Call an LLM using a provider preset name (groq, openai, cerebras, etc.)."""
+    from app.core.config import resolve_model_config
+    config = resolve_model_config(preset_name)
+    if file_contents:
+        return ask_with_files(
+            system, user_message, file_contents,
+            model=config["model"], max_tokens=max_tokens,
+            api_key=config["api_key"], base_url=config["base_url"],
+        )
+    return ask(
+        system, user_message,
+        model=config["model"], max_tokens=max_tokens,
+        api_key=config["api_key"], base_url=config["base_url"],
+    )
