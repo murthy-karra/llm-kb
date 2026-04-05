@@ -111,7 +111,7 @@ function formatSize(bytes) {
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       @click.self="showCreateModal = false"
     >
-      <div class="bg-background rounded-lg shadow-xl w-full max-w-md p-6">
+      <div class="bg-card-bg rounded-lg shadow-xl w-full max-w-md p-6">
         <h2 class="text-[16px] font-semibold text-text-heading mb-4">Create Wiki</h2>
 
         <div class="space-y-4">
@@ -122,7 +122,7 @@ function formatSize(bytes) {
               type="text"
               maxlength="100"
               placeholder="My Wiki"
-              class="w-full px-3 py-2 border border-border rounded text-[13px] text-text-heading placeholder:text-text-muted focus:outline-none focus:border-accent"
+              class="w-full px-3 py-2 bg-card-bg border border-border rounded text-[13px] text-text-heading placeholder:text-text-muted focus:outline-none focus:border-accent"
             />
           </div>
           <div>
@@ -131,7 +131,7 @@ function formatSize(bytes) {
               v-model="newWikiDescription"
               rows="3"
               placeholder="What's this wiki for?"
-              class="w-full px-3 py-2 border border-border rounded text-[13px] text-text-heading placeholder:text-text-muted focus:outline-none focus:border-accent resize-none"
+              class="w-full px-3 py-2 bg-card-bg border border-border rounded text-[13px] text-text-heading placeholder:text-text-muted focus:outline-none focus:border-accent resize-none"
             ></textarea>
           </div>
 

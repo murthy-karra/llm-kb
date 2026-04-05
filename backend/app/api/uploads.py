@@ -26,7 +26,7 @@ ALLOWED_CONTENT_TYPES = {
 }
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
-SCAN_TIMEOUT_SECONDS = 5 * 60
+SCAN_TIMEOUT_SECONDS = 10 * 60
 RECENT_WINDOW_SECONDS = 60
 
 GUARDDUTY_SCAN_STATUS_TAG = "GuardDutyMalwareScanStatus"
@@ -176,6 +176,26 @@ async def presign_upload_urls(
             else f"wikis/{wiki_id}/{file_req.filename}"
         )
 
+        # Handle duplicate s3_key: allow re-upload if previous attempt failed
+        existing = await db.execute(
+            select(WikiFile).where(WikiFile.s3_key == s3_key)
+        )
+        existing_file = existing.scalar_one_or_none()
+        if existing_file:
+            if existing_file.status == "clean":
+                rejected.append(
+                    PresignedFileResponse(
+                        filename=file_req.filename,
+                        relative_path=file_req.relative_path,
+                        rejected=True,
+                        reject_reason="File already exists in this wiki",
+                    )
+                )
+                continue
+            else:
+                await db.delete(existing_file)
+                await db.flush()
+
         wiki_file = WikiFile(
             wiki_id=wiki_id,
             filename=file_req.filename,
@@ -273,78 +293,9 @@ async def get_scan_status(
         raise HTTPException(403, "Access denied")
 
     now = datetime.now(timezone.utc)
-    timeout_threshold = now - timedelta(seconds=SCAN_TIMEOUT_SECONDS)
     recent_threshold = now - timedelta(seconds=RECENT_WINDOW_SECONDS)
 
-    # Get ALL pending_scan files (including those without scan_started_at)
-    pending_result = await db.execute(
-        select(WikiFile).where(
-            WikiFile.wiki_id == wiki_id,
-            WikiFile.status == "pending_scan",
-        )
-    )
-    pending_files = pending_result.scalars().all()
-
-    s3 = get_s3_client()
-
-    for file in pending_files:
-        # If scan_started_at is not set, this file was never confirmed — skip S3 check
-        # but still count it as pending for all_complete
-        if not file.scan_started_at:
-            continue
-
-        try:
-            tagging_response = await asyncio.to_thread(
-                s3.get_object_tagging,
-                Bucket=settings.s3_quarantine_bucket,
-                Key=file.s3_key,
-            )
-            tags = {
-                tag["Key"]: tag["Value"] for tag in tagging_response.get("TagSet", [])
-            }
-
-            scan_status = tags.get(GUARDDUTY_SCAN_STATUS_TAG)
-
-            if scan_status == "NO_THREATS_FOUND":
-                copy_source = {
-                    "Bucket": settings.s3_quarantine_bucket,
-                    "Key": file.s3_key,
-                }
-                await asyncio.to_thread(
-                    s3.copy_object,
-                    CopySource=copy_source,
-                    Bucket=settings.s3_wiki_bucket,
-                    Key=file.s3_key,
-                )
-                await asyncio.to_thread(
-                    s3.delete_object,
-                    Bucket=settings.s3_quarantine_bucket,
-                    Key=file.s3_key,
-                )
-                file.status = "clean"
-                file.transferred_at = now
-            elif scan_status == GUARDDUTY_THREAT_STATUS_TAG:
-                try:
-                    await asyncio.to_thread(
-                        s3.delete_object,
-                        Bucket=settings.s3_quarantine_bucket,
-                        Key=file.s3_key,
-                    )
-                except ClientError:
-                    pass
-                file.status = "failed_scan"
-            elif file.scan_started_at < timeout_threshold:
-                file.status = "failed_timeout"
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code")
-            if error_code in ["404", "NotFound", "NoSuchKey"]:
-                file.status = "failed_upload"
-            elif file.scan_started_at < timeout_threshold:
-                file.status = "failed_timeout"
-
-    await db.commit()
-
-    # Build response: all pending files + recently completed files (last 60s)
+    # Read-only: scan processing is handled by background worker
     status_result = await db.execute(
         select(WikiFile).where(
             WikiFile.wiki_id == wiki_id,

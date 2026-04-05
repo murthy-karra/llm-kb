@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { apiFetch } from '../lib/api'
 
 function nanoid() {
   return crypto.randomUUID()
@@ -55,15 +56,16 @@ export const useUploadsStore = defineStore('uploads', () => {
     const files = Array.from(batch.files.values())
     const nonRejected = files.filter(f => f.status !== 'rejected')
     const total = nonRejected.length
-    const uploaded = nonRejected.filter(f => f.status === 'pending_scan' || f.status === 'clean').length
-    const scanning = nonRejected.filter(f => f.status === 'pending_scan').length
+    const queued = nonRejected.filter(f => f.status === 'queued').length
+    const uploading = nonRejected.filter(f => f.status === 'uploading').length
+    const pending = nonRejected.filter(f => f.status === 'pending_scan').length
     const complete = nonRejected.filter(f => f.status === 'clean').length
     const failed = nonRejected.filter(f => f.status.startsWith('failed')).length
 
     const bytesUploaded = nonRejected.reduce((sum, f) => sum + (f.sizeBytes * f.uploadProgress / 100), 0)
     const bytesTotal = nonRejected.reduce((sum, f) => sum + f.sizeBytes, 0)
 
-    return { uploaded, scanning, complete, failed, total, bytesUploaded, bytesTotal }
+    return { queued, uploading, pending, complete, failed, total, bytesUploaded, bytesTotal }
   }
 
   function filesByFolder(batchId) {
@@ -161,12 +163,9 @@ export const useUploadsStore = defineStore('uploads', () => {
     if (files.length === 0) return
 
     try {
-      const res = await fetch(`/api/wikis/${batch.wikiId}/uploads/presign`, {
+      const res = await apiFetch(`/api/wikis/${batch.wikiId}/uploads/presign`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           files: files.map(f => ({
             filename: f.filename,
@@ -229,11 +228,10 @@ export const useUploadsStore = defineStore('uploads', () => {
     function uploadNext() {
       // Check if all done
       if (nextIndex >= queue.length && activeCount === 0) {
+        clearBeforeUnloadWarning()
         const confirmedFiles = Array.from(batch.files.values()).filter(f => f.status === 'pending_scan')
         if (confirmedFiles.length > 0) {
           startPolling(batchId)
-        } else {
-          clearBeforeUnloadWarning()
         }
         return
       }
@@ -316,12 +314,9 @@ export const useUploadsStore = defineStore('uploads', () => {
     const batch = batches.value.get(batchId)
     if (!batch || !file.wikiFileId) return
 
-    const res = await fetch(`/api/wikis/${batch.wikiId}/uploads/confirm`, {
+    const res = await apiFetch(`/api/wikis/${batch.wikiId}/uploads/confirm`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file_ids: [file.wikiFileId] }),
     })
 
@@ -342,9 +337,7 @@ export const useUploadsStore = defineStore('uploads', () => {
       }
 
       try {
-        const res = await fetch(`/api/wikis/${batch.wikiId}/uploads/status`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        })
+        const res = await apiFetch(`/api/wikis/${batch.wikiId}/uploads/status`)
 
         if (!res.ok) return
 
@@ -360,7 +353,6 @@ export const useUploadsStore = defineStore('uploads', () => {
         if (data.all_complete) {
           clearInterval(pollingTimer)
           pollingTimer = null
-          clearBeforeUnloadWarning()
         }
       } catch (e) {
         console.error('Polling error:', e)

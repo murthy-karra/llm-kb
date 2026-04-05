@@ -4,6 +4,7 @@ import { LayoutDashboard, BookOpen, FileText, MessageCircle, Search, Folder, Log
 import { useAuthStore } from './stores/auth'
 import { useRouter } from 'vue-router'
 import { computed } from 'vue'
+import UploadMiniPanel from './components/upload/UploadMiniPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -69,5 +70,7 @@ async function handleLogout() {
         <RouterView />
       </div>
     </main>
+
+    <UploadMiniPanel />
   </div>
 </template>

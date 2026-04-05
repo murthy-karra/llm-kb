@@ -48,7 +48,7 @@ function handleRetryFile(file) {
 </script>
 
 <template>
-  <div v-if="activeBatch" class="fixed bottom-0 right-0 left-0 bg-background border-t border-border shadow-lg z-50">
+  <div v-if="activeBatch" class="fixed bottom-0 right-0 left-0 bg-card-bg border-t border-border shadow-lg z-50">
     <div class="max-w-2xl mx-auto">
       <div class="px-6 py-4 border-b border-border flex items-center justify-between">
         <div class="flex items-center gap-3">
