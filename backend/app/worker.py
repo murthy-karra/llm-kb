@@ -10,6 +10,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
+import httpx
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +27,24 @@ logger = logging.getLogger("worker")
 
 SCAN_POLL_INTERVAL = 10
 JOB_POLL_INTERVAL = 3
+
+
+async def trigger_reindex(wiki_id: str):
+    """Tell the Rust search engine to reindex a wiki from Postgres."""
+    from app.core.config import settings
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{settings.search_engine_url}/reindex/{wiki_id}",
+                timeout=30.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                logger.info("Reindexed wiki %s: %d articles", wiki_id, data.get("indexed", 0))
+            else:
+                logger.warning("Reindex failed for wiki %s: %d", wiki_id, resp.status_code)
+    except Exception as e:
+        logger.warning("Search engine unreachable for reindex: %s", e)
 
 
 async def pick_job(db: AsyncSession) -> WikiJob | None:
@@ -73,6 +92,9 @@ async def execute_job(job: WikiJob) -> None:
                 articles, costs = await compile_wiki_scoped(
                     job.wiki_id, db, full_rebuild=full, on_progress=update_progress,
                 )
+                # Trigger search engine reindex
+                await trigger_reindex(job.wiki_id)
+
                 job.result = {
                     **(job.result or {}),
                     "articles_written": len(articles),

@@ -137,6 +137,19 @@ export const useWikisStore = defineStore('wikis', () => {
     return await res.json()
   }
 
+  async function searchWiki(wikiId, query, limit = 10) {
+    const res = await apiFetch(`/api/wikis/${wikiId}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => null)
+      throw new Error(err?.detail || `Search failed (${res.status})`)
+    }
+    return await res.json()
+  }
+
   async function compileWiki(wikiId, full = false) {
     const res = await apiFetch(`/api/wikis/${wikiId}/compile`, {
       method: 'POST',
@@ -207,6 +220,7 @@ export const useWikisStore = defineStore('wikis', () => {
     fetchArticles,
     fetchArticle,
     askWiki,
+    searchWiki,
     compileWiki,
     lintWiki,
     getJobStatus,

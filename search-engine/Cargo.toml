@@ -1,16 +1,16 @@
 [package]
 name = "llm-kb-search"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
 tantivy = "0.22"
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tower-http = { version = "0.6", features = ["cors"] }
-walkdir = "2"
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"

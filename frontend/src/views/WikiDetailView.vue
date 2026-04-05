@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Upload, FolderUp, RefreshCw, Sparkles, RotateCcw, SearchCheck, FileText, BookOpen, MessageCircle, Send, ListTodo, Settings } from 'lucide-vue-next'
+import { Upload, FolderUp, RefreshCw, Sparkles, RotateCcw, SearchCheck, FileText, BookOpen, MessageCircle, Send, ListTodo, Settings, Search } from 'lucide-vue-next'
 import { marked } from 'marked'
 import { useWikisStore } from '../stores/wikis'
 import { useUploadsStore } from '../stores/uploads'
@@ -38,6 +38,11 @@ const answerUsage = ref(null)
 // Article detail state
 const selectedArticle = ref(null)
 const articleLoading = ref(false)
+
+// Search state
+const searchQuery = ref('')
+const searchResults = ref(null)
+const searching = ref(false)
 
 // Model settings
 const showSettings = ref(false)
@@ -134,6 +139,20 @@ async function openArticle(slug) {
 
 function closeArticle() {
   selectedArticle.value = null
+}
+
+async function handleSearch() {
+  if (!searchQuery.value.trim()) return
+  searching.value = true
+  searchResults.value = null
+  try {
+    const result = await wikisStore.searchWiki(wikiId.value, searchQuery.value)
+    searchResults.value = result.results
+  } catch (e) {
+    searchResults.value = []
+  } finally {
+    searching.value = false
+  }
 }
 
 async function handleAsk() {
@@ -276,6 +295,7 @@ function formatDate(dateStr) {
           { key: 'files', label: 'Source Files', icon: FileText, count: files.length },
           { key: 'articles', label: 'Articles', icon: BookOpen, count: articles.length },
           { key: 'ask', label: 'Ask', icon: MessageCircle },
+          { key: 'search', label: 'Search', icon: Search },
           { key: 'jobs', label: 'Jobs', icon: ListTodo },
         ]" :key="tab.key"
           @click="activeTab = tab.key; selectedArticle = null"
@@ -370,6 +390,54 @@ function formatDate(dateStr) {
               <span>{{ (answerUsage.prompt_tokens + answerUsage.completion_tokens).toLocaleString() }} tokens</span>
               <span>${{ answerUsage.cost_usd.toFixed(4) }}</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Search -->
+      <div v-if="activeTab === 'search'">
+        <div v-if="articles.length === 0" class="text-center py-10 text-text-muted">
+          <Search :size="32" :stroke-width="1" class="mx-auto mb-2 opacity-40" />
+          <p class="text-[13px]">Compile your wiki first to enable search.</p>
+        </div>
+
+        <div v-else>
+          <div class="flex gap-2 mb-6">
+            <input
+              v-model="searchQuery"
+              @keydown.enter="handleSearch"
+              type="text"
+              placeholder="Search articles..."
+              :disabled="searching"
+              class="flex-1 px-4 py-2.5 bg-card-bg border border-border rounded-lg text-[13px] text-text-heading placeholder:text-text-muted focus:outline-none focus:border-accent disabled:opacity-50"
+            />
+            <button
+              @click="handleSearch"
+              :disabled="searching || !searchQuery.trim()"
+              class="flex items-center gap-1.5 px-5 py-2.5 text-[13px] font-semibold bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Search :size="14" :stroke-width="2" />
+              {{ searching ? 'Searching...' : 'Search' }}
+            </button>
+          </div>
+
+          <div v-if="searchResults && searchResults.length === 0" class="text-center py-8 text-text-muted">
+            <p class="text-[13px]">No results for "{{ searchQuery }}"</p>
+          </div>
+
+          <div v-if="searchResults && searchResults.length > 0" class="space-y-2">
+            <button
+              v-for="result in searchResults" :key="result.slug"
+              @click="activeTab = 'articles'; openArticle(result.slug)"
+              class="w-full text-left border border-border rounded-xl p-4 hover:bg-surface-hover transition-colors cursor-pointer"
+            >
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[13px] font-medium text-text-heading">{{ result.title }}</span>
+                <span class="text-[11px] px-2 py-0.5 bg-surface-hover rounded text-text-muted">{{ result.category }}</span>
+              </div>
+              <p class="text-[12px] text-text-muted line-clamp-2">{{ result.snippet }}</p>
+              <div class="text-[11px] text-text-muted mt-1">Score: {{ result.score.toFixed(2) }}</div>
+            </button>
           </div>
         </div>
       </div>

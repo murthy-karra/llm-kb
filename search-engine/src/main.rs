@@ -1,24 +1,27 @@
-use axum::{extract::State, http::StatusCode, routing::{get, post}, Json, Router};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    routing::{get, post},
+    Json, Router,
+};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use tantivy::{
     collector::TopDocs,
-    directory::MmapDirectory,
     query::QueryParser,
     schema::{Field, Schema, Value, STORED, STRING, TEXT},
     Index, IndexReader, IndexWriter, TantivyDocument,
 };
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use walkdir::WalkDir;
 
 #[derive(Parser)]
-#[command(name = "llm-kb-search", about = "Search engine for LLM Knowledge Base")]
+#[command(name = "llm-kb-search", about = "Wiki-scoped search engine backed by Postgres")]
 struct Args {
-    /// Path to the wiki directory
-    #[arg(long, default_value = "../data/wiki")]
-    wiki_dir: PathBuf,
+    /// PostgreSQL connection string
+    #[arg(long, env = "DATABASE_URL", default_value = "host=localhost user=llmkb password=llmkb_dev_2026 dbname=llm-kb")]
+    database_url: String,
 
     /// Port to listen on
     #[arg(long, default_value_t = 8880)]
@@ -26,105 +29,152 @@ struct Args {
 }
 
 struct Fields {
-    path: Field,
+    wiki_id: Field,
+    slug: Field,
     title: Field,
     body: Field,
     category: Field,
 }
 
-struct AppState {
+struct WikiIndex {
     index: Index,
     reader: IndexReader,
     fields: Fields,
-    wiki_dir: PathBuf,
-    writer: Mutex<IndexWriter>,
+    article_count: usize,
+}
+
+struct AppState {
+    wikis: RwLock<HashMap<String, WikiIndex>>,
+    db_url: String,
 }
 
 fn build_schema() -> (Schema, Fields) {
     let mut builder = Schema::builder();
-    let path = builder.add_text_field("path", STRING | STORED);
+    let wiki_id = builder.add_text_field("wiki_id", STRING | STORED);
+    let slug = builder.add_text_field("slug", STRING | STORED);
     let title = builder.add_text_field("title", TEXT | STORED);
     let body = builder.add_text_field("body", TEXT | STORED);
     let category = builder.add_text_field("category", STRING | STORED);
     let schema = builder.build();
-    (schema, Fields { path, title, body, category })
+    (
+        schema,
+        Fields {
+            wiki_id,
+            slug,
+            title,
+            body,
+            category,
+        },
+    )
 }
 
-/// Extract title and category from YAML frontmatter, return remaining body.
-fn extract_frontmatter(content: &str) -> (Option<String>, Option<String>, &str) {
-    let trimmed = content.trim_start();
-    if !trimmed.starts_with("---") {
-        return (None, None, content);
-    }
-    if let Some(end) = trimmed[3..].find("\n---") {
-        let frontmatter = &trimmed[3..3 + end];
-        let body = &trimmed[3 + end + 4..];
-        let mut title = None;
-        let mut category = None;
-        for line in frontmatter.lines() {
-            let line = line.trim();
-            if let Some(val) = line.strip_prefix("title:") {
-                title = Some(val.trim().trim_matches('\'').trim_matches('"').to_string());
-            } else if let Some(val) = line.strip_prefix("category:") {
-                category = Some(val.trim().trim_matches('\'').trim_matches('"').to_string());
-            }
-        }
-        (title, category, body)
-    } else {
-        (None, None, content)
-    }
-}
+/// Build an in-memory Tantivy index from a list of articles.
+fn build_index(articles: &[Article]) -> Result<WikiIndex, Box<dyn std::error::Error>> {
+    let (schema, fields) = build_schema();
+    let index = Index::create_in_ram(schema);
+    let mut writer: IndexWriter = index.writer(15_000_000)?;
 
-fn index_wiki(
-    wiki_dir: &PathBuf,
-    writer: &mut IndexWriter,
-    fields: &Fields,
-) -> tantivy::Result<usize> {
-    writer.delete_all_documents()?;
-
-    let mut count = 0;
-    for entry in WalkDir::new(wiki_dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path().extension().map_or(false, |ext| ext == "md")
-                && e.file_name() != "INDEX.md"
-        })
-    {
-        let content = match std::fs::read_to_string(entry.path()) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-
-        let rel_path = entry
-            .path()
-            .strip_prefix(wiki_dir)
-            .unwrap_or(entry.path())
-            .to_string_lossy()
-            .to_string();
-
-        let (title, category, body) = extract_frontmatter(&content);
-        let title = title.unwrap_or_else(|| {
-            entry
-                .path()
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string()
-        });
-        let category = category.unwrap_or_default();
-
+    for article in articles {
         let mut doc = TantivyDocument::new();
-        doc.add_text(fields.path, &rel_path);
-        doc.add_text(fields.title, &title);
-        doc.add_text(fields.body, body);
-        doc.add_text(fields.category, &category);
+        doc.add_text(fields.wiki_id, &article.wiki_id);
+        doc.add_text(fields.slug, &article.slug);
+        doc.add_text(fields.title, &article.title);
+        doc.add_text(fields.body, &article.content);
+        doc.add_text(fields.category, &article.category);
         writer.add_document(doc)?;
-        count += 1;
     }
 
     writer.commit()?;
-    Ok(count)
+    let reader = index.reader()?;
+
+    Ok(WikiIndex {
+        index,
+        reader,
+        fields,
+        article_count: articles.len(),
+    })
+}
+
+/// Load all articles for a wiki from Postgres.
+async fn load_articles_from_db(
+    db_url: &str,
+    wiki_id: &str,
+) -> Result<Vec<Article>, Box<dyn std::error::Error>> {
+    let (client, connection) = tokio_postgres::connect(db_url, tokio_postgres::NoTls).await?;
+
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            tracing::error!("Postgres connection error: {}", e);
+        }
+    });
+
+    let rows = client
+        .query(
+            "SELECT wiki_id, slug, title, category, content FROM app.wiki_articles WHERE wiki_id = $1",
+            &[&wiki_id],
+        )
+        .await?;
+
+    let articles: Vec<Article> = rows
+        .iter()
+        .map(|row| Article {
+            wiki_id: row.get(0),
+            slug: row.get(1),
+            title: row.get(2),
+            category: row.get(3),
+            content: row.get(4),
+        })
+        .collect();
+
+    Ok(articles)
+}
+
+/// Load ALL articles from Postgres (for startup).
+async fn load_all_articles_from_db(
+    db_url: &str,
+) -> Result<HashMap<String, Vec<Article>>, Box<dyn std::error::Error>> {
+    let (client, connection) = tokio_postgres::connect(db_url, tokio_postgres::NoTls).await?;
+
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            tracing::error!("Postgres connection error: {}", e);
+        }
+    });
+
+    let rows = client
+        .query(
+            "SELECT wiki_id, slug, title, category, content FROM app.wiki_articles",
+            &[],
+        )
+        .await?;
+
+    let mut grouped: HashMap<String, Vec<Article>> = HashMap::new();
+    for row in rows {
+        let article = Article {
+            wiki_id: row.get(0),
+            slug: row.get(1),
+            title: row.get(2),
+            category: row.get(3),
+            content: row.get(4),
+        };
+        grouped
+            .entry(article.wiki_id.clone())
+            .or_default()
+            .push(article);
+    }
+
+    Ok(grouped)
+}
+
+// ---------- Types ----------
+
+#[derive(Deserialize, Serialize, Clone)]
+struct Article {
+    wiki_id: String,
+    slug: String,
+    title: String,
+    category: String,
+    content: String,
 }
 
 #[derive(Deserialize)]
@@ -140,7 +190,7 @@ fn default_limit() -> usize {
 
 #[derive(Serialize)]
 struct SearchResult {
-    path: String,
+    slug: String,
     title: String,
     snippet: String,
     score: f32,
@@ -151,24 +201,41 @@ struct SearchResult {
 struct SearchResponse {
     results: Vec<SearchResult>,
     count: usize,
+    wiki_id: String,
 }
 
 #[derive(Serialize)]
 struct ReindexResponse {
+    wiki_id: String,
     indexed: usize,
 }
+
+#[derive(Serialize)]
+struct StatsResponse {
+    wikis: usize,
+    total_articles: usize,
+    per_wiki: HashMap<String, usize>,
+}
+
+// ---------- Handlers ----------
 
 async fn health() -> &'static str {
     "ok"
 }
 
-async fn search(
+async fn search_wiki(
     State(state): State<Arc<AppState>>,
+    Path(wiki_id): Path<String>,
     Json(req): Json<SearchRequest>,
 ) -> Result<Json<SearchResponse>, StatusCode> {
-    let searcher = state.reader.searcher();
-    let query_parser =
-        QueryParser::for_index(&state.index, vec![state.fields.title, state.fields.body]);
+    let wikis = state.wikis.read().await;
+    let wiki_index = wikis.get(&wiki_id).ok_or(StatusCode::NOT_FOUND)?;
+
+    let searcher = wiki_index.reader.searcher();
+    let query_parser = QueryParser::for_index(
+        &wiki_index.index,
+        vec![wiki_index.fields.title, wiki_index.fields.body],
+    );
 
     let query = query_parser
         .parse_query(&req.query)
@@ -184,22 +251,22 @@ async fn search(
             .doc(doc_address)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        let path = doc
-            .get_first(state.fields.path)
+        let slug = doc
+            .get_first(wiki_index.fields.slug)
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
         let title = doc
-            .get_first(state.fields.title)
+            .get_first(wiki_index.fields.title)
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
         let body = doc
-            .get_first(state.fields.body)
+            .get_first(wiki_index.fields.body)
             .and_then(|v| v.as_str())
             .unwrap_or("");
         let category = doc
-            .get_first(state.fields.category)
+            .get_first(wiki_index.fields.category)
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
@@ -207,7 +274,7 @@ async fn search(
         let snippet: String = body.chars().take(200).collect();
 
         results.push(SearchResult {
-            path,
+            slug,
             title,
             snippet,
             score,
@@ -216,19 +283,61 @@ async fn search(
     }
 
     let count = results.len();
-    Ok(Json(SearchResponse { results, count }))
+    Ok(Json(SearchResponse {
+        results,
+        count,
+        wiki_id,
+    }))
 }
 
-async fn reindex(
+async fn reindex_wiki(
     State(state): State<Arc<AppState>>,
+    Path(wiki_id): Path<String>,
 ) -> Result<Json<ReindexResponse>, StatusCode> {
-    let mut writer = state.writer.lock().await;
-    let indexed =
-        index_wiki(&state.wiki_dir, &mut writer, &state.fields)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    state.reader.reload().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(ReindexResponse { indexed }))
+    let articles = load_articles_from_db(&state.db_url, &wiki_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to load articles for wiki {}: {}", wiki_id, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let article_count = articles.len();
+    let wiki_index = build_index(&articles).map_err(|e| {
+        tracing::error!("Failed to build index for wiki {}: {}", wiki_id, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let mut wikis = state.wikis.write().await;
+    if article_count > 0 {
+        wikis.insert(wiki_id.clone(), wiki_index);
+    } else {
+        wikis.remove(&wiki_id);
+    }
+
+    tracing::info!("Reindexed wiki {}: {} articles", wiki_id, article_count);
+
+    Ok(Json(ReindexResponse {
+        wiki_id,
+        indexed: article_count,
+    }))
 }
+
+async fn stats(State(state): State<Arc<AppState>>) -> Json<StatsResponse> {
+    let wikis = state.wikis.read().await;
+    let mut per_wiki = HashMap::new();
+    let mut total = 0;
+    for (id, idx) in wikis.iter() {
+        per_wiki.insert(id.clone(), idx.article_count);
+        total += idx.article_count;
+    }
+    Json(StatsResponse {
+        wikis: wikis.len(),
+        total_articles: total,
+        per_wiki,
+    })
+}
+
+// ---------- Main ----------
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -236,34 +345,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args = Args::parse();
 
-    let wiki_dir = std::fs::canonicalize(&args.wiki_dir).unwrap_or_else(|_| args.wiki_dir.clone());
-    tracing::info!("Wiki directory: {}", wiki_dir.display());
+    tracing::info!("Loading articles from Postgres...");
+    let all_articles = load_all_articles_from_db(&args.database_url).await?;
 
-    let (schema, fields) = build_schema();
-
-    let index_path = wiki_dir.join(".tantivy-index");
-    std::fs::create_dir_all(&index_path)?;
-    let dir = MmapDirectory::open(&index_path)?;
-    let index = Index::open_or_create(dir, schema)?;
-
-    let mut writer = index.writer(50_000_000)?;
-    let count = index_wiki(&wiki_dir, &mut writer, &fields)?;
-    tracing::info!("Indexed {} documents", count);
-
-    let reader = index.reader()?;
+    let mut wikis = HashMap::new();
+    let mut total = 0;
+    for (wiki_id, articles) in all_articles {
+        let count = articles.len();
+        total += count;
+        let wiki_index = build_index(&articles)?;
+        tracing::info!("  Wiki {}: {} articles indexed", wiki_id, count);
+        wikis.insert(wiki_id, wiki_index);
+    }
+    tracing::info!("Indexed {} articles across {} wikis", total, wikis.len());
 
     let state = Arc::new(AppState {
-        index,
-        reader,
-        fields,
-        wiki_dir,
-        writer: Mutex::new(writer),
+        wikis: RwLock::new(wikis),
+        db_url: args.database_url,
     });
 
     let app = Router::new()
         .route("/health", get(health))
-        .route("/search", post(search))
-        .route("/reindex", post(reindex))
+        .route("/stats", get(stats))
+        .route("/search/{wiki_id}", post(search_wiki))
+        .route("/reindex/{wiki_id}", post(reindex_wiki))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

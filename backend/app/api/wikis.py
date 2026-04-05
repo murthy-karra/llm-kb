@@ -514,3 +514,32 @@ async def ask_wiki(
             "cost_usd": round(resp.cost_usd, 4),
         },
     }
+
+
+# ---------- Search (proxy to Rust Tantivy engine) ----------
+
+
+class SearchWikiRequest(BaseModel):
+    query: str
+    limit: int = 10
+
+
+@router.post("/{wiki_id}/search")
+async def search_wiki(
+    wiki_id: str,
+    req: SearchWikiRequest,
+    current_user: User = Depends(get_current_user),
+):
+    import httpx
+    from app.core.config import settings
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{settings.search_engine_url}/search/{wiki_id}",
+                json={"query": req.query, "limit": req.limit},
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(503, f"Search engine unavailable: {e}")

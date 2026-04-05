@@ -1,6 +1,6 @@
 <script setup>
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { LayoutDashboard, BookOpen, FileText, MessageCircle, Search, Folder, LogOut } from 'lucide-vue-next'
+import { Folder, LogOut } from 'lucide-vue-next'
 import { useAuthStore } from './stores/auth'
 import { useRouter } from 'vue-router'
 import { computed } from 'vue'
@@ -13,12 +13,7 @@ const auth = useAuthStore()
 const isLoginPage = computed(() => route.name === 'login')
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/wikis', label: 'Wikis', icon: Folder },
-  { to: '/wiki', label: 'Wiki', icon: BookOpen },
-  { to: '/raw', label: 'Raw Sources', icon: FileText },
-  { to: '/ask', label: 'Ask', icon: MessageCircle },
-  { to: '/search', label: 'Search', icon: Search },
 ]
 
 async function handleLogout() {
@@ -66,7 +61,7 @@ async function handleLogout() {
     </aside>
 
     <main class="flex-1 py-8 px-10 overflow-auto">
-      <div :class="route.name === 'article' ? 'max-w-5xl' : 'max-w-3xl'">
+      <div class="max-w-4xl">
         <RouterView />
       </div>
     </main>
